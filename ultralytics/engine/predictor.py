@@ -12,7 +12,7 @@ Usage - sources:
                                                 list.streams                    # list of streams
                                                 'path/*.jpg'                    # glob
                                                 'https://youtu.be/LNwODJXcvt4'  # YouTube
-                                                'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP, TCP stream
+                                                'rtsp://example.com/media.mp4'  # RTSP, RTMP, HTTP stream
 
 Usage - formats:
     $ yolo mode=predict model=yolov8n.pt                 # PyTorch
@@ -33,6 +33,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import time
 
 from ultralytics.cfg import get_cfg, get_save_dir
 from ultralytics.data import load_inference_source
@@ -58,7 +59,7 @@ Example:
 
 class BasePredictor:
     """
-    BasePredictor.
+    BasePredictor
 
     A base class for creating predictors.
 
@@ -109,8 +110,7 @@ class BasePredictor:
         callbacks.add_integration_callbacks(self)
 
     def preprocess(self, im):
-        """
-        Prepares input image before inference.
+        """Prepares input image before inference.
 
         Args:
             im (torch.Tensor | List(np.ndarray)): BCHW for tensor, [(HWC) x B] for list.
@@ -129,7 +129,6 @@ class BasePredictor:
         return im
 
     def inference(self, im, *args, **kwargs):
-        """Runs inference on a given image using the specified model and arguments."""
         visualize = increment_path(self.save_dir / Path(self.batch[0][0]).stem,
                                    mkdir=True) if self.args.visualize and (not self.source_type.tensor) else False
         return self.model(im, augment=self.args.augment, visualize=visualize)
@@ -177,6 +176,8 @@ class BasePredictor:
         # Write
         if self.args.save_txt:
             result.save_txt(f'{self.txt_path}.txt', save_conf=self.args.save_conf)
+            # dst = cv2.copyMakeBorder(result.orig_img, 420, 420, 0, 0, cv2.BORDER_CONSTANT, None, value=(114,114,114))
+            # cv2.imwrite(f'{self.txt_path}.jpg', dst)
         if self.args.save_crop:
             result.save_crop(save_dir=self.save_dir / 'crops',
                              file_name=self.data_path.stem + ('' if self.dataset.mode == 'image' else f'_{frame}'))
@@ -196,11 +197,7 @@ class BasePredictor:
             return list(self.stream_inference(source, model, *args, **kwargs))  # merge list of Result into one
 
     def predict_cli(self, source=None, model=None):
-        """
-        Method used for CLI prediction.
-
-        It uses always generator as outputs as not required by CLI mode.
-        """
+        """Method used for CLI prediction. It uses always generator as outputs as not required by CLI mode."""
         gen = self.stream_inference(source, model)
         for _ in gen:  # running CLI inference without accumulating any outputs (do not modify)
             pass
@@ -266,6 +263,9 @@ class BasePredictor:
             # Visualize, save, write results
             n = len(im0s)
             for i in range(n):
+                if self.results[i].boxes.shape[0] == 0:
+                    cv2.imwrite(f'/home/vynk9/camera/background_v2/background_{int(time.time())}.jpg', self.results[i].orig_img)
+                
                 self.seen += 1
                 self.results[i].speed = {
                     'preprocess': profilers[0].dt * 1E3 / n,
@@ -358,5 +358,7 @@ class BasePredictor:
             callback(self)
 
     def add_callback(self, event: str, func):
-        """Add callback."""
+        """
+        Add callback
+        """
         self.callbacks[event].append(func)
